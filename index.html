@@ -14,6 +14,9 @@ h1{margin:0 0 4px}p.s{color:var(--mut);margin:0 0 20px}
 label{display:block;font-weight:600;margin:16px 0 4px}
 textarea,input[type=text],input[type=file]{width:100%;background:var(--card);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:10px;font:inherit}
 textarea{min-height:110px;resize:vertical}
+select{width:100%;background:var(--card);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:10px;font:inherit}
+input[type=password]{width:100%;background:var(--card);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:10px;font:inherit}
+label:has(#aiOn){display:flex;gap:8px;align-items:center;font-weight:400}
 :focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 button{background:var(--ac);color:var(--on);border:0;border-radius:8px;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer}
@@ -41,6 +44,13 @@ details{margin-top:8px;color:var(--mut)}code{background:var(--card);border:1px s
 <textarea id="n" placeholder="Type, dictate with Wispr Flow, or use the mic button"></textarea>
 <div class="row"><button class="g" id="mic" aria-pressed="false" hidden>🎤 Dictate note</button></div>
 <label for="p">Project name</label><input id="p" type="text" value="My project" autocomplete="off">
+<details id="ai"><summary>Polish with AI (optional, off by default)</summary>
+<label><input type="checkbox" id="aiOn"> Rewrite the four outputs with a free LLM using my own API key</label>
+<label for="aiP">Provider</label>
+<select id="aiP"><option value="groq">Groq (free tier)</option><option value="openrouter">OpenRouter (free models)</option><option value="gemini">Google Gemini (free tier)</option></select>
+<label for="aiM">Model (edit if the default is retired)</label><input id="aiM" type="text" autocomplete="off">
+<label for="aiK">API key (kept in this tab's memory only, never saved)</label><input id="aiK" type="password" autocomplete="off">
+<p>When on, your <b>masked</b> draft outputs (stats, your note, up to 5 quoted prompts) go to the chosen provider. The raw transcript is never sent. Free tiers may log or train on inputs; check the provider's terms.</p></details>
 <div class="row"><button id="go">Generate</button><button class="g" id="sm">Load sample</button></div>
 
 <div id="res" aria-live="polite"></div>
@@ -128,13 +138,45 @@ function render(o,r,nred){
   $("ca").onclick=e=>copy(all,e.target);
   $("dl").onclick=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([all],{type:"text/markdown"}));a.download="shiplog.md";a.click();URL.revokeObjectURL(a.href)};
 }
-function run(){
+// Free-tier providers that allow browser (CORS) calls. Model ids change; the field is editable.
+const PROVIDERS={
+  groq:{model:"llama-3.3-70b-versatile",url:()=>"https://api.groq.com/openai/v1/chat/completions",hdr:k=>({Authorization:"Bearer "+k}),body:(m,p)=>({model:m,messages:[{role:"user",content:p}],temperature:.4}),out:d=>d.choices[0].message.content},
+  openrouter:{model:"meta-llama/llama-3.3-70b-instruct:free",url:()=>"https://openrouter.ai/api/v1/chat/completions",hdr:k=>({Authorization:"Bearer "+k}),body:(m,p)=>({model:m,messages:[{role:"user",content:p}],temperature:.4}),out:d=>d.choices[0].message.content},
+  gemini:{model:"gemini-2.0-flash",url:m=>`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent`,hdr:k=>({"x-goog-api-key":k}),body:(m,p)=>({contents:[{parts:[{text:p}]}]}),out:d=>d.candidates[0].content.parts[0].text}
+};
+function llmPrompt(o){
+  return `Rewrite these four drafts to read naturally and concisely in first person. Keep every number, name and hashtag exactly as written. Do not invent facts. Keep the same four keys and the demo script's timestamps. Reply with only a JSON object whose keys are exactly: ${Object.keys(o).map(k=>JSON.stringify(k)).join(", ")}; values are plain strings.\n\n${JSON.stringify(o)}`;
+}
+async function polish(o){
+  const pv=PROVIDERS[$("aiP").value],key=$("aiK").value.trim(),model=$("aiM").value.trim()||pv.model;
+  if(!key)throw new Error("Enter an API key or turn AI off.");
+  const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),45000);
+  try{
+    const resp=await fetch(pv.url(model),{method:"POST",signal:ctl.signal,headers:{"Content-Type":"application/json",...pv.hdr(key)},body:JSON.stringify(pv.body(model,llmPrompt(o)))});
+    if(!resp.ok)throw new Error(`${resp.status} ${resp.statusText||""}`.trim()+(resp.status===429?" (free-tier rate limit; wait and retry)":[400,401,403].includes(resp.status)?" (check the key and model)":resp.status===404?" (check the model name)":""));
+    const txt=pv.out(await resp.json()),m=txt.match(/\{[\s\S]*\}/);
+    const j=JSON.parse(m?m[0]:txt),out={};
+    for(const k in o){if(typeof j[k]!=="string"||!j[k].trim())throw new Error("model reply missing section "+k);out[k]=j[k].trim()}
+    return out;
+  }finally{clearTimeout(to)}
+}
+async function run(){
   const r=parse($("t").value);
   if(!r.prompts.length){res.innerHTML='<p class="msg">No prompts found. Choose a Claude Code .jsonl file, paste its lines, or paste plain text (one instruction per line).</p>';return}
-  const o=gen(r,$("n").value,$("p").value.trim()||"my project");let nred=0;
+  let o=gen(r,$("n").value,$("p").value.trim()||"my project");let nred=0;
   for(const k in o){const x=redact(o[k]);o[k]=x.s;nred+=x.n}
+  let note="";
+  if($("aiOn").checked){
+    const b=$("go");b.disabled=true;b.textContent="Polishing…";
+    try{const p=await polish(o);for(const k in p){const x=redact(p[k]);p[k]=x.s;nred+=x.n}o=p;note="Polished by "+$("aiP").selectedOptions[0].text+"."}
+    catch(e){note="AI polish failed ("+(e.name==="AbortError"?"timed out":e.message)+"). Showing the template version."}
+    finally{b.disabled=false;b.textContent="Generate"}
+  }
   render(o,r,nred);
+  if(note)res.insertAdjacentHTML("afterbegin",`<p class="msg">${esc(note)}</p>`);
 }
+const syncModel=()=>{$("aiM").value=PROVIDERS[$("aiP").value].model};
+$("aiP").onchange=syncModel;syncModel();
 $("f").onchange=async e=>{$("t").value=(await Promise.all([...e.target.files].map(f=>f.text()))).join("\n")};
 $("sm").onclick=()=>{$("t").value=SAMPLE;$("n").value="I kept rewriting the same weekly update for every hackathon, so I built a tool that writes it from my own transcripts.";$("p").value="ShipLog";run()};
 $("go").onclick=run;
@@ -161,6 +203,8 @@ if(location.search==="?test"){
   chk(parse("fix the bug\nadd tests").prompts.length===2,"plain text");
   chk(parse('{"type":"user","message":{"content":"<pasted_content id=\\"a\\">lots of words here</pasted_content id=\\"a\\"> hi there"}}').prompts[0].text==="hi there","paste strip");
   chk(redact("key sk-abcdefghijklmnop1234 me@x.com /Users/bob/p").n===3,"redact");
+  chk(!$("aiOn").checked&&$("aiM").value===PROVIDERS.groq.model,"ai off by default");
+  chk(llmPrompt({"A":"x"}).includes('"A"'),"llm prompt");
   document.title=bad.length?"FAIL "+bad.join(","):"ShipLog tests passed";
 }
 </script></body></html>
