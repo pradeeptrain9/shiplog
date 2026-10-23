@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ShipLog</title>
+<style>
+:root{--bg:#fafaf7;--fg:#1c1c1a;--mut:#6b6b64;--card:#fff;--bd:#dcdcd2;--ac:#0b6b4f}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141413;--fg:#ecece6;--mut:#9a9a90;--card:#1d1d1b;--bd:#33332f;--ac:#4cc79a}}
+:root[data-theme="dark"]{--bg:#141413;--fg:#ecece6;--mut:#9a9a90;--card:#1d1d1b;--bd:#33332f;--ac:#4cc79a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}
+main{max-width:860px;margin:0 auto;padding:24px 16px 64px}
+h1{margin:0 0 4px}p.s{color:var(--mut);margin:0 0 20px}
+label{display:block;font-weight:600;margin:16px 0 4px}
+textarea,input{width:100%;background:var(--card);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:10px;font:inherit}
+textarea{min-height:110px;resize:vertical}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+button{background:var(--ac);color:var(--bg);border:0;border-radius:8px;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer}
+button.g{background:transparent;color:var(--fg);border:1px solid var(--bd)}
+.stats{display:flex;gap:16px;flex-wrap:wrap;margin:20px 0;color:var(--mut)}.stats b{color:var(--fg);font-size:1.3em;display:block}
+.out{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-top:14px}
+.out h2{margin:0 0 8px;font-size:1.05em;display:flex;justify-content:space-between;align-items:center}
+.out pre{white-space:pre-wrap;margin:0;font:inherit}
+.out button{padding:4px 10px;font-size:.85em}
+.fb{color:var(--mut);font-size:.85em;margin-top:24px}
+</style></head><body><main>
+<h1>ShipLog</h1>
+<p class="s">Turn your Claude Code transcript + a spoken note into your weekly check-in, build-in-public post, submission write-up and demo script. Runs fully in your browser; nothing is uploaded.</p>
+
+<label for="f">Transcript(s) (.jsonl from ~/.claude/projects/…)</label>
+<input id="f" type="file" accept=".jsonl,.json,.txt" multiple>
+<label for="t">…or paste transcript lines</label>
+<textarea id="t" placeholder="One JSON object per line"></textarea>
+<label for="n">Your note (dictate it: what you tried, what broke, what the tool does)</label>
+<textarea id="n" placeholder="e.g. I kept rewriting hackathon write-ups, so I built ShipLog…"></textarea>
+<label for="p">Project name</label><input id="p" value="ShipLog">
+<div class="row"><button id="go">Generate</button><button class="g" id="sm">Load sample</button></div>
+
+<div id="res"></div>
+<p class="fb">Word counts use your prompts to Claude as a proxy for words dictated; the official number is your Wispr Insights card. Tool and file names come from the transcript. Edit the output before posting.</p>
+</main>
+<script>
+const SAMPLE=[
+{type:"user",timestamp:"2026-10-24T09:00:00Z",message:{content:"Build a tool that reads my Claude Code transcripts and writes my weekly check-in. Keep it a single HTML file."}},
+{type:"assistant",timestamp:"2026-10-24T09:01:00Z",message:{content:[{type:"text",text:"Plan: parse jsonl, count tools, render outputs."},{type:"tool_use",name:"Write",input:{file_path:"/p/shiplog/index.html"}}]}},
+{type:"user",timestamp:"2026-10-24T09:20:00Z",message:{content:[{type:"text",text:"The parser breaks on image blocks. Skip them and add a self check."}]}},
+{type:"assistant",timestamp:"2026-10-24T09:22:00Z",message:{content:[{type:"tool_use",name:"Edit",input:{file_path:"/p/shiplog/index.html"}},{type:"tool_use",name:"Bash",input:{command:"node check.js"}}]}},
+{type:"user",timestamp:"2026-10-25T14:00:00Z",message:{content:"Add the demo script output with a two minute shot list."}},
+{type:"assistant",timestamp:"2026-10-25T14:05:00Z",message:{content:[{type:"tool_use",name:"Edit",input:{file_path:"/p/shiplog/index.html"}}]}}
+].map(o=>JSON.stringify(o)).join("\n");
+
+const NOISE=/^(<system-reminder|<command-|<local-command|Caveman|\[Request interrupted)/;
+const words=s=>(s.trim().match(/\S+/g)||[]).length;
+
+// Returns {prompts:[{t,text}], tools:{name:n}, files:Set, days:Set, bashN, start, end}
+function parse(raw){
+  const r={prompts:[],tools:{},files:new Set(),days:new Set(),start:null,end:null};
+  for(const line of raw.split("\n")){
+    let d;try{d=JSON.parse(line)}catch{continue}
+    const ts=d.timestamp,c=d.message&&d.message.content;
+    if(!c||(d.type!=="user"&&d.type!=="assistant"))continue;
+    if(ts){r.days.add(ts.slice(0,10));if(!r.start||ts<r.start)r.start=ts;if(!r.end||ts>r.end)r.end=ts}
+    const blocks=typeof c==="string"?[{type:"text",text:c}]:c;
+    for(const b of blocks){
+      if(d.type==="user"&&b.type==="text"&&!NOISE.test(b.text.trim())&&b.text.trim())r.prompts.push({t:ts,text:b.text.trim()});
+      if(d.type==="assistant"&&b.type==="tool_use"){
+        r.tools[b.name]=(r.tools[b.name]||0)+1;
+        const fp=b.input&&b.input.file_path;
+        if(fp&&/^(Write|Edit|NotebookEdit)$/.test(b.name))r.files.add(fp.split("/").slice(-2).join("/"));
+      }
+    }
+  }
+  return r;
+}
+
+const short=(s,n=140)=>{s=s.replace(/\s+/g," ");return s.length>n?s.slice(0,n-1)+"…":s};
+const topN=(o,k)=>Object.entries(o).sort((a,b)=>b[1]-a[1]).slice(0,k).map(([n,c])=>`${n} ×${c}`).join(", ");
+
+function gen(r,note,name){
+  const W=r.prompts.reduce((a,p)=>a+words(p.text),0),days=r.days.size,files=[...r.files];
+  const tools=Object.values(r.tools).reduce((a,b)=>a+b,0);
+  const moments=r.prompts.filter(p=>words(p.text)>=6).slice(0,5).map(p=>"• "+short(p.text));
+  const n=note.trim()||"(add a note: what you tried, what broke, who it is for)";
+  const stat=`${W} words spoken/typed to Claude across ${r.prompts.length} prompts over ${days} day${days==1?"":"s"}; ${tools} tool calls; ${files.length} files touched`;
+  return {
+   "Weekly check-in":`Progress on ${name}\n\n${stat}.\n\nWhat happened:\n${n}\n\nKey instructions I gave:\n${moments.join("\n")||"•  (none found)"}\n\nMost-used tools: ${topN(r.tools,4)||"none"}.\nFiles touched: ${files.slice(0,6).join(", ")||"none"}.\n\nNext: ship, record demo, upload Wispr usage card.`,
+   "Build-in-public post":`${days} day${days==1?"":"s"} into building ${name} for #NoHandsChallenge by @WeMakeDevs + @WisprFlow.\n\n${short(n,200)}\n\nSo far: ${W} words, ${files.length} files, ${tools} tool calls — nearly all spoken, not typed.\n\nLatest ask I gave the AI: "${short((r.prompts.at(-1)||{text:"…"}).text,120)}"`,
+   "Submission write-up":`Problem: ${short(n,300)}\nWho it is for: people who build and repeatedly write up their work (hackathons, challenges, weekly updates).\nHow I used Wispr: I dictated the spec and every follow-up into my coding tool — ${r.prompts.length} prompts, ${W} words across ${days} day${days==1?"":"s"}. ${name} was built from those transcripts and now produces its own check-ins and write-up from them.\nTested on: my own build history (this one).`,
+   "2-minute demo script":`0:00  Problem. Say: "Every build week I rewrite the same update." Show an empty text box.\n0:15  Load transcript (${r.prompts.length} prompts, ${days} day${days==1?"":"s"}).\n0:30  Hold Fn, dictate the note. Show it land in the note field.\n0:50  Hit Generate. Show stats: ${W} words, ${files.length} files.\n1:10  Open check-in, post and write-up. Copy one.\n1:35  Say what I would fix next. Show Wispr usage card.\n1:55  End on the project link.`
+  };
+}
+
+const esc=s=>s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+function render(o,r){
+  const W=r.prompts.reduce((a,p)=>a+words(p.text),0);
+  res.innerHTML=`<div class="stats"><span><b>${W}</b>words</span><span><b>${r.prompts.length}</b>prompts</span><span><b>${r.days.size}</b>days</span><span><b>${r.files.size}</b>files</span></div>`+
+   Object.entries(o).map(([h,t],i)=>`<div class="out"><h2>${h}<button class="g" data-i="${i}">Copy</button></h2><pre>${esc(t)}</pre></div>`).join("");
+  res.querySelectorAll("button[data-i]").forEach(b=>b.onclick=()=>{navigator.clipboard.writeText(Object.values(o)[b.dataset.i]);b.textContent="Copied"});
+}
+const $=id=>document.getElementById(id),res=$("res");
+$("f").onchange=async e=>{$("t").value=(await Promise.all([...e.target.files].map(f=>f.text()))).join("\n")};
+$("sm").onclick=()=>{$("t").value=SAMPLE;$("n").value="I kept rewriting the same weekly update for every hackathon, so I built a tool that writes it from my own transcripts.";go.click()};
+const go=$("go");go.onclick=()=>{const r=parse($("t").value);render(gen(r,$("n").value,$("p").value||"my project"),r)};
+
+// Self-check: open index.html?test
+if(location.search==="?test"){
+  const r=parse(SAMPLE);
+  console.assert(r.prompts.length===3,"prompts",r.prompts.length);
+  console.assert(r.days.size===2,"days");
+  console.assert(r.files.size===1&&r.tools.Edit===2,"tools/files");
+  console.assert(parse('{"type":"user","message":{"content":"<system-reminder>x"}}\nnot json').prompts.length===0,"noise");
+  document.title="ShipLog tests done";
+}
+</script></body></html>
