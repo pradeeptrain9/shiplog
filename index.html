@@ -1,40 +1,50 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ShipLog</title>
+<meta name="description" content="Turn your Claude Code transcript and a spoken note into a weekly check-in, build-in-public post, submission write-up and demo script. Runs in your browser; nothing is uploaded.">
+<meta property="og:title" content="ShipLog"><meta property="og:description" content="Your build history, written up in one click. Private, in-browser.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b6b4f'/%3E%3Cpath d='M8 22l5-6 4 3 7-9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
-:root{--bg:#fafaf7;--fg:#1c1c1a;--mut:#6b6b64;--card:#fff;--bd:#dcdcd2;--ac:#0b6b4f}
-@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141413;--fg:#ecece6;--mut:#9a9a90;--card:#1d1d1b;--bd:#33332f;--ac:#4cc79a}}
-:root[data-theme="dark"]{--bg:#141413;--fg:#ecece6;--mut:#9a9a90;--card:#1d1d1b;--bd:#33332f;--ac:#4cc79a}
+:root{--bg:#fafaf7;--fg:#1c1c1a;--mut:#6b6b64;--card:#fff;--bd:#dcdcd2;--ac:#0b6b4f;--on:#fff;--warn:#9a5b00}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141413;--fg:#ecece6;--mut:#9a9a90;--card:#1d1d1b;--bd:#33332f;--ac:#4cc79a;--on:#0d1f18;--warn:#e0a84a}}
+:root[data-theme="dark"]{--bg:#141413;--fg:#ecece6;--mut:#9a9a90;--card:#1d1d1b;--bd:#33332f;--ac:#4cc79a;--on:#0d1f18;--warn:#e0a84a}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}
 main{max-width:860px;margin:0 auto;padding:24px 16px 64px}
 h1{margin:0 0 4px}p.s{color:var(--mut);margin:0 0 20px}
 label{display:block;font-weight:600;margin:16px 0 4px}
-textarea,input{width:100%;background:var(--card);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:10px;font:inherit}
+textarea,input[type=text],input[type=file]{width:100%;background:var(--card);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:10px;font:inherit}
 textarea{min-height:110px;resize:vertical}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-button{background:var(--ac);color:var(--bg);border:0;border-radius:8px;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer}
+button{background:var(--ac);color:var(--on);border:0;border-radius:8px;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer}
 button.g{background:transparent;color:var(--fg);border:1px solid var(--bd)}
-.stats{display:flex;gap:16px;flex-wrap:wrap;margin:20px 0;color:var(--mut)}.stats b{color:var(--fg);font-size:1.3em;display:block}
+button[aria-pressed=true]{background:#b3261e;color:#fff;border-color:#b3261e}
+.stats{display:flex;gap:16px;flex-wrap:wrap;margin:20px 0 0;color:var(--mut)}.stats b{color:var(--fg);font-size:1.3em;display:block}
+.msg{margin-top:14px;color:var(--warn)}
 .out{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-top:14px}
 .out h2{margin:0 0 8px;font-size:1.05em;display:flex;justify-content:space-between;align-items:center}
-.out pre{white-space:pre-wrap;margin:0;font:inherit}
+.out pre{white-space:pre-wrap;margin:0;font:inherit;overflow-wrap:anywhere}
 .out button{padding:4px 10px;font-size:.85em}
+details{margin-top:8px;color:var(--mut)}code{background:var(--card);border:1px solid var(--bd);border-radius:4px;padding:1px 5px;font-size:.9em;overflow-wrap:anywhere}
 .fb{color:var(--mut);font-size:.85em;margin-top:24px}
 </style></head><body><main>
 <h1>ShipLog</h1>
-<p class="s">Turn your Claude Code transcript + a spoken note into your weekly check-in, build-in-public post, submission write-up and demo script. Runs fully in your browser; nothing is uploaded.</p>
+<p class="s">Turn your Claude Code transcript and a spoken note into your weekly check-in, build-in-public post, submission write-up and demo script. Runs fully in your browser; nothing is uploaded.</p>
 
-<label for="f">Transcript(s) (.jsonl from ~/.claude/projects/…)</label>
+<label for="f">Transcript(s)</label>
 <input id="f" type="file" accept=".jsonl,.json,.txt" multiple>
+<details><summary>Where do I find transcripts?</summary>
+<p>Claude Code saves each session as a <code>.jsonl</code> file. On macOS/Linux, list the newest with <code>ls -t ~/.claude/projects/*/*.jsonl | head</code>. You can also paste plain text below (one instruction per line) and ShipLog will treat each line as a prompt.</p></details>
 <label for="t">…or paste transcript lines</label>
-<textarea id="t" placeholder="One JSON object per line"></textarea>
-<label for="n">Your note (dictate it: what you tried, what broke, what the tool does)</label>
-<textarea id="n" placeholder="e.g. I kept rewriting hackathon write-ups, so I built ShipLog…"></textarea>
-<label for="p">Project name</label><input id="p" value="ShipLog">
+<textarea id="t" placeholder="One JSON object per line, or plain text"></textarea>
+<label for="n">Your note: what you tried, what broke, what the tool does</label>
+<textarea id="n" placeholder="Type, dictate with Wispr Flow, or use the mic button"></textarea>
+<div class="row"><button class="g" id="mic" aria-pressed="false" hidden>🎤 Dictate note</button></div>
+<label for="p">Project name</label><input id="p" type="text" value="My project" autocomplete="off">
 <div class="row"><button id="go">Generate</button><button class="g" id="sm">Load sample</button></div>
 
-<div id="res"></div>
-<p class="fb">Word counts use your prompts to Claude as a proxy for words dictated; the official number is your Wispr Insights card. Tool and file names come from the transcript. Edit the output before posting.</p>
+<div id="res" aria-live="polite"></div>
+<p class="fb">Word counts use your prompts to Claude as a proxy for words dictated (pasted blocks are excluded); the official number is your Wispr Insights card. Likely secrets (API keys, tokens, emails) and your home folder name are masked in the output, but read it before posting. Your input never leaves this page; the mic uses your browser's speech service, which may send audio to its provider.</p>
 </main>
 <script>
 const SAMPLE=[
@@ -46,20 +56,32 @@ const SAMPLE=[
 {type:"assistant",timestamp:"2026-10-25T14:05:00Z",message:{content:[{type:"tool_use",name:"Edit",input:{file_path:"/p/shiplog/index.html"}}]}}
 ].map(o=>JSON.stringify(o)).join("\n");
 
-const NOISE=/^(<system-reminder|<command-|<local-command|Caveman|\[Request interrupted)/;
+const NOISE=/^(<system-reminder|<command-|<local-command|<ide_|\[Request interrupted|Caveman )/;
+const PASTE=/<pasted_content[^>]*>[\s\S]*?<\/pasted_content[^>]*>/g;
 const words=s=>(s.trim().match(/\S+/g)||[]).length;
 
-// Returns {prompts:[{t,text}], tools:{name:n}, files:Set, days:Set, bashN, start, end}
+// shortcut: regex redaction catches common key shapes only, extend SECRETS when a new format leaks
+const SECRETS=[/sk-[A-Za-z0-9_-]{16,}/g,/gh[pousr]_[A-Za-z0-9]{20,}/g,/AKIA[0-9A-Z]{16}/g,/xox[baprs]-[A-Za-z0-9-]{10,}/g,/Bearer\s+[A-Za-z0-9._~+\/-]{16,}/g,/[\w.+-]+@[\w-]+\.[\w.-]+/g,/\/(?:Users|home)\/[^\/\s"']+/g];
+function redact(s){let n=0;for(const r of SECRETS)s=s.replace(r,()=>{n++;return"[redacted]"});return{s,n}}
+
+// Returns {prompts:[{t,text}], tools:{name:n}, files:Set, days:Set, start, end}
 function parse(raw){
   const r={prompts:[],tools:{},files:new Set(),days:new Set(),start:null,end:null};
-  for(const line of raw.split("\n")){
+  let jsonLines=0;
+  const lines=raw.split("\n");
+  for(const line of lines){
     let d;try{d=JSON.parse(line)}catch{continue}
+    if(!d||typeof d!=="object")continue;
+    jsonLines++;
     const ts=d.timestamp,c=d.message&&d.message.content;
     if(!c||(d.type!=="user"&&d.type!=="assistant"))continue;
     if(ts){r.days.add(ts.slice(0,10));if(!r.start||ts<r.start)r.start=ts;if(!r.end||ts>r.end)r.end=ts}
     const blocks=typeof c==="string"?[{type:"text",text:c}]:c;
     for(const b of blocks){
-      if(d.type==="user"&&b.type==="text"&&!NOISE.test(b.text.trim())&&b.text.trim())r.prompts.push({t:ts,text:b.text.trim()});
+      if(d.type==="user"&&b.type==="text"){
+        const t=b.text.replace(PASTE,"").trim();
+        if(t&&!NOISE.test(t))r.prompts.push({t:ts,text:t});
+      }
       if(d.type==="assistant"&&b.type==="tool_use"){
         r.tools[b.name]=(r.tools[b.name]||0)+1;
         const fp=b.input&&b.input.file_path;
@@ -67,45 +89,78 @@ function parse(raw){
       }
     }
   }
+  if(!jsonLines)for(const l of lines)if(l.trim())r.prompts.push({t:null,text:l.trim()}); // plain-text fallback
   return r;
 }
 
 const short=(s,n=140)=>{s=s.replace(/\s+/g," ");return s.length>n?s.slice(0,n-1)+"…":s};
 const topN=(o,k)=>Object.entries(o).sort((a,b)=>b[1]-a[1]).slice(0,k).map(([n,c])=>`${n} ×${c}`).join(", ");
+const plural=(n,w)=>`${n} ${w}${n==1?"":"s"}`;
 
 function gen(r,note,name){
   const W=r.prompts.reduce((a,p)=>a+words(p.text),0),days=r.days.size,files=[...r.files];
   const tools=Object.values(r.tools).reduce((a,b)=>a+b,0);
   const moments=r.prompts.filter(p=>words(p.text)>=6).slice(0,5).map(p=>"• "+short(p.text));
   const n=note.trim()||"(add a note: what you tried, what broke, who it is for)";
-  const stat=`${W} words spoken/typed to Claude across ${r.prompts.length} prompts over ${days} day${days==1?"":"s"}; ${tools} tool calls; ${files.length} files touched`;
+  const span=days?` over ${plural(days,"day")}`:"";
+  const stat=`${plural(W,"word")} to Claude across ${plural(r.prompts.length,"prompt")}${span}${tools?`; ${plural(tools,"tool call")}`:""}${files.length?`; ${plural(files.length,"file")} touched`:""}`;
+  const last=(r.prompts.at(-1)||{text:"…"}).text;
   return {
-   "Weekly check-in":`Progress on ${name}\n\n${stat}.\n\nWhat happened:\n${n}\n\nKey instructions I gave:\n${moments.join("\n")||"•  (none found)"}\n\nMost-used tools: ${topN(r.tools,4)||"none"}.\nFiles touched: ${files.slice(0,6).join(", ")||"none"}.\n\nNext: ship, record demo, upload Wispr usage card.`,
-   "Build-in-public post":`${days} day${days==1?"":"s"} into building ${name} for #NoHandsChallenge by @WeMakeDevs + @WisprFlow.\n\n${short(n,200)}\n\nSo far: ${W} words, ${files.length} files, ${tools} tool calls — nearly all spoken, not typed.\n\nLatest ask I gave the AI: "${short((r.prompts.at(-1)||{text:"…"}).text,120)}"`,
-   "Submission write-up":`Problem: ${short(n,300)}\nWho it is for: people who build and repeatedly write up their work (hackathons, challenges, weekly updates).\nHow I used Wispr: I dictated the spec and every follow-up into my coding tool — ${r.prompts.length} prompts, ${W} words across ${days} day${days==1?"":"s"}. ${name} was built from those transcripts and now produces its own check-ins and write-up from them.\nTested on: my own build history (this one).`,
-   "2-minute demo script":`0:00  Problem. Say: "Every build week I rewrite the same update." Show an empty text box.\n0:15  Load transcript (${r.prompts.length} prompts, ${days} day${days==1?"":"s"}).\n0:30  Hold Fn, dictate the note. Show it land in the note field.\n0:50  Hit Generate. Show stats: ${W} words, ${files.length} files.\n1:10  Open check-in, post and write-up. Copy one.\n1:35  Say what I would fix next. Show Wispr usage card.\n1:55  End on the project link.`
+   "Weekly check-in":`Progress on ${name}\n\n${stat}.\n\nWhat happened:\n${n}\n\nKey instructions I gave:\n${moments.join("\n")||"• (none long enough to quote)"}\n${tools?`\nMost-used tools: ${topN(r.tools,4)}.`:""}${files.length?`\nFiles touched: ${files.slice(0,6).join(", ")}.`:""}\n\nNext: ship, record demo, upload usage card.`,
+   "Build-in-public post":`${days?plural(days,"day")+" into building":"Building"} ${name} for #NoHandsChallenge by @WeMakeDevs + @WisprFlow.\n\n${short(n,200)}\n\nSo far: ${stat}.\n\nLatest ask I gave the AI: "${short(last,120)}"`,
+   "Submission write-up":`Problem: ${short(n,300)}\nWho it is for: people who build and repeatedly write up their work (hackathons, challenges, weekly updates).\nHow I used Wispr: I dictated the spec and follow-ups into my coding tool: ${plural(r.prompts.length,"prompt")}, ${plural(W,"word")}${span}. ${name} turns that history into its own check-ins and write-up.\nTested on: my own build history.`,
+   "2-minute demo script":`0:00  Problem. Say: "Every build week I rewrite the same update." Show an empty text box.\n0:15  Load transcript (${plural(r.prompts.length,"prompt")}${span}).\n0:30  Hold Fn, dictate the note. Show it land in the note field.\n0:50  Hit Generate. Show stats: ${plural(W,"word")}.\n1:10  Open check-in, post and write-up. Copy one.\n1:35  Say what you would fix next. Show the Wispr usage card.\n1:55  End on the project link.`
   };
 }
 
 const esc=s=>s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
-function render(o,r){
+const $=id=>document.getElementById(id),res=$("res");
+const safe=(f)=>{try{return f()}catch{}};
+function render(o,r,nred){
   const W=r.prompts.reduce((a,p)=>a+words(p.text),0);
   res.innerHTML=`<div class="stats"><span><b>${W}</b>words</span><span><b>${r.prompts.length}</b>prompts</span><span><b>${r.days.size}</b>days</span><span><b>${r.files.size}</b>files</span></div>`+
+   (nred?`<p class="msg">${plural(nred,"item")} masked as secrets or personal paths.</p>`:"")+
+   `<div class="row"><button class="g" id="ca">Copy all</button><button class="g" id="dl">Download .md</button></div>`+
    Object.entries(o).map(([h,t],i)=>`<div class="out"><h2>${h}<button class="g" data-i="${i}">Copy</button></h2><pre>${esc(t)}</pre></div>`).join("");
-  res.querySelectorAll("button[data-i]").forEach(b=>b.onclick=()=>{navigator.clipboard.writeText(Object.values(o)[b.dataset.i]);b.textContent="Copied"});
+  const all=Object.entries(o).map(([h,t])=>`## ${h}\n\n${t}`).join("\n\n");
+  const copy=(t,b)=>navigator.clipboard.writeText(t).then(()=>{const x=b.textContent;b.textContent="Copied";setTimeout(()=>b.textContent=x,1500)},()=>{b.textContent="Copy failed"});
+  res.querySelectorAll("button[data-i]").forEach(b=>b.onclick=()=>copy(Object.values(o)[b.dataset.i],b));
+  $("ca").onclick=e=>copy(all,e.target);
+  $("dl").onclick=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([all],{type:"text/markdown"}));a.download="shiplog.md";a.click();URL.revokeObjectURL(a.href)};
 }
-const $=id=>document.getElementById(id),res=$("res");
+function run(){
+  const r=parse($("t").value);
+  if(!r.prompts.length){res.innerHTML='<p class="msg">No prompts found. Choose a Claude Code .jsonl file, paste its lines, or paste plain text (one instruction per line).</p>';return}
+  const o=gen(r,$("n").value,$("p").value.trim()||"my project");let nred=0;
+  for(const k in o){const x=redact(o[k]);o[k]=x.s;nred+=x.n}
+  render(o,r,nred);
+}
 $("f").onchange=async e=>{$("t").value=(await Promise.all([...e.target.files].map(f=>f.text()))).join("\n")};
-$("sm").onclick=()=>{$("t").value=SAMPLE;$("n").value="I kept rewriting the same weekly update for every hackathon, so I built a tool that writes it from my own transcripts.";go.click()};
-const go=$("go");go.onclick=()=>{const r=parse($("t").value);render(gen(r,$("n").value,$("p").value||"my project"),r)};
+$("sm").onclick=()=>{$("t").value=SAMPLE;$("n").value="I kept rewriting the same weekly update for every hackathon, so I built a tool that writes it from my own transcripts.";$("p").value="ShipLog";run()};
+$("go").onclick=run;
+// keep note and name across visits
+for(const id of["n","p"]){const v=safe(()=>localStorage.getItem("shiplog."+id));if(v)$(id).value=v;$(id).oninput=()=>safe(()=>localStorage.setItem("shiplog."+id,$(id).value))}
+// mic dictation (Chrome/Edge/Safari); hidden where unsupported
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+if(SR){const m=$("mic");m.hidden=false;let rec=null;
+  m.onclick=()=>{
+    if(rec){rec.stop();return}
+    rec=new SR();rec.continuous=true;rec.interimResults=false;rec.lang=navigator.language||"en-US";
+    rec.onresult=e=>{for(let i=e.resultIndex;i<e.results.length;i++)if(e.results[i].isFinal){const n=$("n");n.value=(n.value+" "+e.results[i][0].transcript).trim();n.dispatchEvent(new Event("input"))}};
+    rec.onend=()=>{rec=null;m.setAttribute("aria-pressed","false");m.textContent="🎤 Dictate note"};
+    rec.onerror=e=>{res.innerHTML=`<p class="msg">Mic unavailable (${esc(e.error)}). Type, or use Wispr Flow in the note field.</p>`};
+    rec.start();m.setAttribute("aria-pressed","true");m.textContent="⏹ Stop dictating";
+  }}
 
-// Self-check: open index.html?test
+// Self-check: open index.html?test and read the console
 if(location.search==="?test"){
-  const r=parse(SAMPLE);
-  console.assert(r.prompts.length===3,"prompts",r.prompts.length);
-  console.assert(r.days.size===2,"days");
-  console.assert(r.files.size===1&&r.tools.Edit===2,"tools/files");
-  console.assert(parse('{"type":"user","message":{"content":"<system-reminder>x"}}\nnot json').prompts.length===0,"noise");
-  document.title="ShipLog tests done";
+  const r=parse(SAMPLE),bad=[];
+  const chk=(c,m)=>{if(!c)bad.push(m)};
+  chk(r.prompts.length===3,"prompts");chk(r.days.size===2,"days");chk(r.files.size===1&&r.tools.Edit===2,"tools/files");
+  chk(parse('{"type":"user","message":{"content":"<system-reminder>x"}}').prompts.length===0,"noise");
+  chk(parse("fix the bug\nadd tests").prompts.length===2,"plain text");
+  chk(parse('{"type":"user","message":{"content":"<pasted_content id=\\"a\\">lots of words here</pasted_content id=\\"a\\"> hi there"}}').prompts[0].text==="hi there","paste strip");
+  chk(redact("key sk-abcdefghijklmnop1234 me@x.com /Users/bob/p").n===3,"redact");
+  document.title=bad.length?"FAIL "+bad.join(","):"ShipLog tests passed";
 }
 </script></body></html>
